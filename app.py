@@ -1,4 +1,4 @@
-"""PantaMitra: crop disease detection + regional-language voice advice.
+"""PantaMitra: crop disease detection + full advice in English, Telugu, Hindi.
 Run: streamlit run app.py
 """
 import io
@@ -12,44 +12,84 @@ from PIL import Image
 
 LANGS = {"English": "en", "తెలుగు": "te", "हिन्दी": "hi"}
 
-# Keyed by the disease part of PlantVillage class names (Crop___Disease).
-ADVICE = {
-    "healthy": {
-        "en": "The leaf looks healthy. Keep monitoring your field regularly.",
-        "te": "ఆకు ఆరోగ్యంగా ఉంది. క్రమం తప్పకుండా పొలాన్ని గమనించండి.",
-        "hi": "पत्ता स्वस्थ है। खेत की नियमित निगरानी करते रहें।",
-    },
-    "early_blight": {
-        "en": "Early blight detected. Remove infected leaves and avoid wetting the foliage. If it spreads, use a fungicide on the advice of your agriculture officer.",
-        "te": "ఇది ముందస్తు ఆకుమచ్చ తెగులు. సోకిన ఆకులను తీసివేసి, ఆకులపై నీరు పడకుండా చూడండి. అవసరమైతే వ్యవసాయ అధికారి సలహాతో శిలీంద్రనాశిని వాడండి.",
-        "hi": "यह अगेती झुलसा रोग है। संक्रमित पत्ते हटाएं और पत्तियों पर पानी न पड़ने दें। जरूरत हो तो कृषि अधिकारी की सलाह से फफूंदनाशक का प्रयोग करें।",
-    },
-    "late_blight": {
-        "en": "Late blight detected. It spreads fast. Remove infected plants immediately and contact your agriculture officer.",
-        "te": "ఇది ఆలస్య ఆకుమచ్చ తెగులు, వేగంగా వ్యాపిస్తుంది. సోకిన మొక్కలను వెంటనే తొలగించి, వ్యవసాయ అధికారిని సంప్రదించండి.",
-        "hi": "यह पछेती झुलसा रोग है, जो तेजी से फैलता है। संक्रमित पौधे तुरंत हटाएं और कृषि अधिकारी से संपर्क करें।",
-    },
-    "leaf_mold": {
-        "en": "Leaf mold detected. Improve air flow between plants and remove infected leaves.",
-        "te": "ఇది ఆకు బూజు తెగులు. గాలి బాగా ఆడేలా మొక్కల మధ్య ఎడం ఉంచండి, సోకిన ఆకులు తీసివేయండి.",
-        "hi": "यह पत्ती फफूंद रोग है। पौधों के बीच हवा के लिए जगह रखें और संक्रमित पत्ते हटाएं।",
-    },
-    "bacterial_spot": {
-        "en": "Bacterial spot detected. Remove infected leaves, avoid overhead watering and ask your agriculture officer for treatment.",
-        "te": "ఇది బ్యాక్టీరియా మచ్చ తెగులు. సోకిన ఆకులు తీసివేసి, పై నుంచి నీరు చల్లడం మానండి, వ్యవసాయ అధికారి సలహా తీసుకోండి.",
-        "hi": "यह जीवाणु धब्बा रोग है। संक्रमित पत्ते हटाएं, ऊपर से पानी देना बंद करें और कृषि अधिकारी से सलाह लें।",
-    },
+# Full advice per disease (English). Telugu/Hindi are translated at runtime.
+KB = {
+    "healthy": dict(sev="none", name="Healthy leaf",
+        cause="No disease signs were found on this leaf.",
+        symptoms="Even green colour, no spots, curling or webbing.",
+        cure="No treatment needed.",
+        prevent="Keep checking the field every few days, water at the base of the plant and keep the field clean."),
+    "early_blight": dict(sev="medium", name="Early blight",
+        cause="A fungus (Alternaria solani) that spreads in warm, humid weather.",
+        symptoms="Brown spots with ring patterns like a target, starting on older lower leaves, with yellowing around them. Leaves may dry and fall.",
+        cure="Remove and destroy badly affected leaves. If it keeps spreading, spray a fungicide such as mancozeb or chlorothalonil as per the label and your agriculture officer's advice.",
+        prevent="Rotate crops every 2 to 3 years, space the plants for air flow, mulch the soil and avoid wetting the leaves."),
+    "late_blight": dict(sev="high", name="Late blight",
+        cause="A water mould (Phytophthora infestans) that spreads very fast in cool, wet weather.",
+        symptoms="Large dark, greasy-looking patches on leaves and stems, white fuzzy growth underneath in humid weather, and rotting fruit or tubers.",
+        cure="Act immediately. Remove and destroy infected plants (do not compost them) and contact your agriculture officer at once for the right fungicide and schedule.",
+        prevent="Use resistant varieties and healthy seed, avoid overhead watering, give good spacing and do not leave infected plant waste in the field."),
+    "bacterial_spot": dict(sev="medium", name="Bacterial spot",
+        cause="Bacteria (Xanthomonas) that spread by water splash, tools and infected seed.",
+        symptoms="Small dark, water-soaked spots on leaves that turn brown or black, often with a yellow ring. Rough scabby spots on fruit.",
+        cure="Remove infected leaves and avoid working in the field when plants are wet. Copper-based sprays can slow it, used as per the label and your agriculture officer's advice.",
+        prevent="Use disease-free seed, rotate crops, water at the base instead of overhead and clean tools."),
+    "leaf_mold": dict(sev="medium", name="Leaf mold",
+        cause="A fungus (Passalora fulva) that thrives in high humidity and poor air flow.",
+        symptoms="Pale green or yellow patches on the upper side of leaves and an olive-green to brown velvety mould underneath.",
+        cure="Improve ventilation, remove infected leaves and, if it spreads, use a fungicide as per the label and your agriculture officer's advice.",
+        prevent="Reduce humidity, keep plants well spaced and pruned and avoid wetting the leaves."),
+    "septoria": dict(sev="medium", name="Septoria leaf spot",
+        cause="A fungus (Septoria lycopersici) that spreads by rain splash.",
+        symptoms="Many small round spots with dark edges and grey-white centres, often with tiny black dots, starting on lower leaves.",
+        cure="Remove infected lower leaves. If it spreads, spray a fungicide such as chlorothalonil, mancozeb or copper as per the label and your agriculture officer's advice.",
+        prevent="Rotate crops, mulch to stop soil splash, avoid overhead watering and clear plant waste after harvest."),
+    "spider": dict(sev="medium", name="Spider mite damage",
+        cause="Tiny two-spotted spider mites (a pest, not a fungus) that multiply in hot, dry weather.",
+        symptoms="Fine yellow speckles, bronze or dry leaves and thin webbing on the underside of leaves.",
+        cure="Spray water on the underside of leaves, then neem oil or insecticidal soap. For heavy attacks, use a miticide only on your agriculture officer's advice.",
+        prevent="Avoid dust and water stress, check leaf undersides regularly and protect natural predators of mites."),
+    "target_spot": dict(sev="medium", name="Target spot",
+        cause="A fungus (Corynespora cassiicola) that spreads in warm, humid conditions.",
+        symptoms="Brown spots with ring patterns and a yellow edge on leaves, sometimes on stems and fruit.",
+        cure="Remove infected leaves and, if it spreads, use a fungicide as per the label and your agriculture officer's advice.",
+        prevent="Improve air flow, rotate crops and avoid wetting the leaves."),
+    "yellow_leaf_curl": dict(sev="high", name="Yellow leaf curl virus",
+        cause="A virus spread by whiteflies. The virus itself cannot be cured.",
+        symptoms="Leaves curl upward and turn yellow at the edges, the plant stays small and gives very few fruits.",
+        cure="Remove and destroy infected plants early so the virus does not spread. Control whiteflies with yellow sticky traps, neem oil or an insecticide on your agriculture officer's advice.",
+        prevent="Use resistant varieties, cover nursery beds with fine net, remove weeds and control whiteflies from the start."),
+    "mosaic": dict(sev="high", name="Mosaic virus",
+        cause="A virus that spreads by touch, tools, hands and infected seed. The virus itself cannot be cured.",
+        symptoms="Light and dark green mottled patches, curled or narrow leaves and stunted plants.",
+        cure="Remove and destroy infected plants. Wash hands and disinfect tools after handling them.",
+        prevent="Use clean seed and resistant varieties, disinfect tools and avoid handling plants after tobacco use."),
 }
-GENERIC = {
-    "en": "A possible disease was detected. Please show the leaf to your local agriculture officer for confirmation.",
-    "te": "ఒక తెగులు ఉండే అవకాశం ఉంది. నిర్ధారణ కోసం స్థానిక వ్యవసాయ అధికారికి ఆకును చూపించండి.",
-    "hi": "संभावित रोग मिला है। पुष्टि के लिए स्थानीय कृषि अधिकारी को पत्ता दिखाएं।",
+UI = {
+    "en": dict(cause="What is it", symptoms="Symptoms", cure="Treatment", prevent="Prevention", conf="Confidence"),
+    "te": dict(cause="ఇది ఏమిటి", symptoms="లక్షణాలు", cure="చికిత్స", prevent="నివారణ", conf="నమ్మకం"),
+    "hi": dict(cause="यह क्या है", symptoms="लक्षण", cure="इलाज", prevent="रोकथाम", conf="भरोसा"),
 }
-LOW_CONF = {
-    "en": "I am not sure. Please retake a clear, close photo of a single leaf.",
-    "te": "నాకు ఖచ్చితంగా తెలియదు. ఒక ఆకు యొక్క స్పష్టమైన, దగ్గరి ఫోటో మళ్లీ తీయండి.",
-    "hi": "मुझे यकीन नहीं है। कृपया एक पत्ते की साफ, नजदीकी फोटो दोबारा लें।",
-}
+CAUTION = "Always follow the product label and confirm serious cases with your local agriculture officer."
+LOW = "I am not sure. Please retake a clear, close photo of a single leaf."
+UNKNOWN = "A possible disease was detected. Please show the leaf to your local agriculture officer for confirmation and treatment."
+
+
+@st.cache_data(show_spinner=False)
+def tr(text, lang):
+    """Translate English text to Telugu/Hindi (needs internet). Falls back to English."""
+    if lang == "en":
+        return text
+    try:
+        from deep_translator import GoogleTranslator
+        return GoogleTranslator(source="en", target=lang).translate(text)
+    except Exception:
+        return text
+
+
+def lookup(disease):
+    d = disease.lower()
+    return next((k for k in KB if k in d), None)
 
 
 @st.cache_resource
@@ -60,10 +100,13 @@ def load_model():
     return tf.keras.models.load_model("crop_model.keras"), json.load(open("classes.json"))
 
 
-def speak(text, lang):
-    buf = io.BytesIO()
-    gTTS(text=text, lang=lang).write_to_fp(buf)  # needs internet
-    return buf.getvalue()
+def say(text, lang):
+    try:
+        buf = io.BytesIO()
+        gTTS(text=text, lang=lang).write_to_fp(buf)  # needs internet
+        st.audio(buf.getvalue(), format="audio/mp3")
+    except Exception:
+        st.caption("Voice needs an internet connection.")
 
 
 st.set_page_config(page_title="PantaMitra", page_icon="🌿")
@@ -72,15 +115,18 @@ st.caption("AI crop doctor that speaks your language")
 
 lang_name = st.radio("Language / భాష / भाषा", list(LANGS), horizontal=True)
 lang = LANGS[lang_name]
+L = UI[lang]
 model, classes = load_model()
 
 label, conf = None, 1.0
 if model is None:
     st.warning("Demo mode: no trained model found. Run train.py to enable photo detection.")
-    label = st.selectbox("Pick a disease to preview advice",
-                         ["Tomato___Early_blight", "Tomato___Late_blight",
-                          "Tomato___Leaf_Mold", "Tomato___Bacterial_spot",
-                          "Potato___healthy"])
+    label = st.selectbox("Pick a disease to preview advice", [
+        "Tomato___Early_blight", "Tomato___Late_blight", "Tomato___Bacterial_spot",
+        "Tomato___Leaf_Mold", "Tomato___Septoria_leaf_spot",
+        "Tomato___Spider_mites Two-spotted_spider_mite", "Tomato___Target_Spot",
+        "Tomato___Tomato_Yellow_Leaf_Curl_Virus", "Tomato___Tomato_mosaic_virus",
+        "Tomato___healthy", "Potato___Early_blight", "Potato___Late_blight", "Potato___healthy"])
 else:
     src = st.camera_input("Take a leaf photo") or st.file_uploader(
         "...or upload one", type=["jpg", "jpeg", "png"])
@@ -94,14 +140,23 @@ else:
 
 if label:
     crop, _, disease = label.partition("___")
-    st.subheader(f"{crop.replace('_', ' ')}: {disease.replace('_', ' ')}")
-    st.progress(conf, text=f"Confidence: {conf:.0%}")
+    crop_t = tr(crop.replace("_", " "), lang)
+    key = lookup(disease)
+    st.progress(conf, text=f"{L['conf']}: {conf:.0%}")
     if conf < 0.6:
-        text = LOW_CONF[lang]
+        msg = tr(LOW, lang)
+        st.warning(msg)
+        say(msg, lang)
+    elif key is None:
+        msg = f"{crop_t}: {tr(disease.replace('_', ' '), lang)}. {tr(UNKNOWN, lang)}"
+        st.warning(msg)
+        say(msg, lang)
     else:
-        text = ADVICE.get(disease.lower(), GENERIC)[lang]
-    st.info(text)
-    try:
-        st.audio(speak(text, lang), format="audio/mp3")
-    except Exception:
-        st.caption("Voice needs an internet connection.")
+        k = KB[key]
+        title = f"{crop_t}: {tr(k['name'], lang)}"
+        {"none": st.success, "medium": st.warning, "high": st.error}[k["sev"]](f"### {title}")
+        parts = {f: tr(k[f], lang) for f in ("cause", "symptoms", "cure", "prevent")}
+        for f in ("cause", "symptoms", "cure", "prevent"):
+            st.markdown(f"**{L[f]}**\n\n{parts[f]}")
+        st.caption(tr(CAUTION, lang))
+        say(f"{title}. {parts['cure']} {parts['prevent']}", lang)
