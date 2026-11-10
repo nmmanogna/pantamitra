@@ -1,6 +1,0 @@
-tensorflow-cpu
-streamlit
-gTTS
-pillow
-numpy
-deep-translator
