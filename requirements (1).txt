@@ -1,0 +1,7 @@
+tensorflow-cpu
+streamlit
+gTTS
+pillow
+numpy
+deep-translator
+streamlit-back-camera-input
